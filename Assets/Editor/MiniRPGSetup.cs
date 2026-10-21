@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -6,13 +7,17 @@ using UnityEngine;
 namespace MiniRPG.EditorTools
 {
     /// <summary>
-    /// Crée la scène Assets/Scenes/Main.unity à la première ouverture du projet et l'ajoute au Build.
-    /// La scène est vide : tout le jeu est construit en code au lancement (voir RPGGame).
+    /// Outils d'éditeur du Mini RPG :
+    /// - à la première ouverture du projet, crée Assets/Scenes/Main.unity avec le décor déjà généré ;
+    /// - menu « Mini RPG > Générer le décor dans la scène » pour (re)générer le décor dans la scène ouverte.
+    /// Le décor généré est fait de GameObjects ordinaires (matériaux enregistrés dans Assets/Materials) :
+    /// on peut le modifier librement, le jeu l'utilisera tel quel.
     /// </summary>
     [InitializeOnLoad]
     public static class MiniRPGSetup
     {
         const string ScenePath = "Assets/Scenes/Main.unity";
+        const string MaterialsFolder = "Assets/Materials";
 
         static MiniRPGSetup()
         {
@@ -23,7 +28,7 @@ namespace MiniRPG.EditorTools
             };
         }
 
-        [MenuItem("Mini RPG/Créer ou ouvrir la scène principale")]
+        [MenuItem("Mini RPG/Créer ou ouvrir la scène principale", priority = 0)]
         static void CreateOrOpen()
         {
             if (File.Exists(ScenePath))
@@ -34,16 +39,95 @@ namespace MiniRPG.EditorTools
             else CreateMainScene(false);
         }
 
+        [MenuItem("Mini RPG/Générer le décor dans la scène", priority = 20)]
+        static void GenerateMenu()
+        {
+            var existing = Object.FindAnyObjectByType<LevelRoot>();
+            if (existing != null)
+            {
+                bool replace = EditorUtility.DisplayDialog("Mini RPG",
+                    "La scène contient déjà un décor (« " + existing.name + " »).\n\n" +
+                    "Le remplacer par un décor neuf ? Vos modifications de ce décor seront perdues (annulable avec Ctrl+Z).",
+                    "Remplacer", "Annuler");
+                if (!replace) return;
+                Undo.DestroyObjectImmediate(existing.gameObject);
+            }
+
+            var root = GenerateEnvironment();
+            Undo.RegisterCreatedObjectUndo(root, "Générer le décor");
+            Selection.activeGameObject = root;
+            EditorSceneManager.MarkSceneDirty(root.scene);
+        }
+
+        [MenuItem("Mini RPG/Générer le décor dans la scène", true)]
+        static bool GenerateMenuValidate()
+        {
+            return !EditorApplication.isPlaying;
+        }
+
+        static GameObject GenerateEnvironment()
+        {
+            var created = new Dictionary<Color, Material>();
+            Prim.MaterialProvider = c => MaterialAsset(c, created);
+            GameObject root;
+            try
+            {
+                root = WorldBuilder.BuildEnvironment();
+            }
+            finally
+            {
+                Prim.MaterialProvider = null;
+            }
+            AssetDatabase.SaveAssets();
+            EnsureCamera();
+            return root;
+        }
+
+        /// <summary>Un matériau par couleur, enregistré (ou réutilisé) dans Assets/Materials.</summary>
+        static Material MaterialAsset(Color color, Dictionary<Color, Material> created)
+        {
+            Material m;
+            if (created.TryGetValue(color, out m)) return m;
+
+            var path = MaterialsFolder + "/Mat_" + ColorUtility.ToHtmlStringRGB(color) + ".mat";
+            m = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (m == null)
+            {
+                if (!AssetDatabase.IsValidFolder(MaterialsFolder)) AssetDatabase.CreateFolder("Assets", "Materials");
+                m = new Material(Prim.BaseMaterial) { color = color };
+                AssetDatabase.CreateAsset(m, path);
+            }
+            created[color] = m;
+            return m;
+        }
+
+        /// <summary>Ajoute une caméra pour que la vue Game ne soit pas vide hors jeu (le jeu la réutilise).</summary>
+        static void EnsureCamera()
+        {
+            if (Camera.main != null) return;
+            var go = new GameObject("Main Camera");
+            go.tag = "MainCamera";
+            var cam = go.AddComponent<Camera>();
+            cam.clearFlags = CameraClearFlags.SolidColor;
+            cam.backgroundColor = RenderSettings.fogColor;
+            cam.fieldOfView = 55f;
+            go.AddComponent<AudioListener>();
+            go.transform.position = new Vector3(0f, 4.5f, -17f);
+            go.transform.rotation = Quaternion.Euler(18f, 0f, 0f);
+            Undo.RegisterCreatedObjectUndo(go, "Générer le décor");
+        }
+
         static void CreateMainScene(bool silent)
         {
             if (!silent && !EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
 
             Directory.CreateDirectory("Assets/Scenes");
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            GenerateEnvironment();
             EditorSceneManager.SaveScene(scene, ScenePath);
             EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
             AssetDatabase.Refresh();
-            Debug.Log("[Mini RPG] Scène " + ScenePath + " créée. Appuyez sur Play pour jouer !");
+            Debug.Log("[Mini RPG] Scène " + ScenePath + " créée avec le décor. Appuyez sur Play pour jouer !");
         }
     }
 }

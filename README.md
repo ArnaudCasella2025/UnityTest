@@ -1,19 +1,33 @@
 # Mini RPG : Les bandits de la colline
 
-Petit RPG d'action à la 3e personne, entièrement construit en code avec des formes primitives :
-capsules pour les personnages, cubes, sphères et cylindres pour le décor. Aucun asset, aucun prefab,
-aucune scène à préparer à la main.
+Petit RPG d'action à la 3e personne, construit avec des formes primitives :
+capsules pour les personnages, cubes, sphères et cylindres pour le décor. Aucun modèle 3D ni prefab.
 
 ## Lancer le jeu
 
 1. Ouvrir le dossier avec **Unity 6000.3.12f1** (Unity 6.3) via Unity Hub > *Add project from disk*.
    Si Unity propose de redémarrer pour activer le nouveau système de saisie (Input System), accepter.
-2. À la première ouverture, la scène `Assets/Scenes/Main.unity` est créée automatiquement
+2. À la première ouverture, la scène `Assets/Scenes/Main.unity` est créée automatiquement, décor compris
    (sinon : menu **Mini RPG > Créer ou ouvrir la scène principale**).
 3. Appuyer sur **Play**.
 
-Le monde est généré au lancement par `RPGGame` (démarrage automatique dans n'importe quelle scène).
-Pour le désactiver, ajouter le symbole `MINIRPG_NO_AUTOSTART` dans *Project Settings > Player > Scripting Define Symbols*.
+## Modifier le décor
+
+Menu **Mini RPG > Générer le décor dans la scène** : tout le décor (lumière, sol, village, forêt, chemin, camp)
+est créé dans la scène ouverte, sous l'objet **Environnement**. Ce sont des GameObjects ordinaires, avec leurs
+matériaux enregistrés dans `Assets/Materials` : déplacez, dupliquez, supprimez ou ajoutez ce que vous voulez,
+puis enregistrez la scène (Ctrl/Cmd+S). Au lancement, le jeu utilise ce décor tel quel.
+
+- **Points d'apparition** (`Environnement > Village > Points d'apparition`) : objets *Spawn - Joueur*, *Spawn - Aldric*,
+  etc. Déplacez-les et tournez-les pour changer où apparaissent le joueur et les PNJ (repères visibles dans la vue Scene).
+- **Camp des bandits** : déplacer l'objet *BanditCamp* déplace aussi les bandits et la zone de quête
+  (le marqueur *Spawn - Camp des bandits* en fait partie).
+- Relancer le menu propose de remplacer le décor par un décor neuf (annulable avec Ctrl/Cmd+Z).
+- Les objets ajoutés à la main ont besoin d'un collider pour bloquer le joueur (les primitives Unity en ont un par défaut).
+
+Les personnages, les dialogues et la quête restent créés en code au lancement (sous l'objet *Gameplay*).
+Sans décor dans la scène, le jeu le génère lui-même au lancement. Pour désactiver complètement le démarrage
+automatique, ajouter le symbole `MINIRPG_NO_AUTOSTART` dans *Project Settings > Player > Scripting Define Symbols*.
 
 Le projet utilise le pipeline de rendu intégré (Built-in). Les commandes passent par `GameInput`, qui fonctionne avec le package
 Input System comme avec l'ancien Input Manager, quel que soit le réglage *Active Input Handling*.
@@ -50,7 +64,7 @@ qui changent selon l'avancement de la quête. Berthe offre une potion quand la q
 
 | Dossier | Contenu |
 |---|---|
-| `Core/` | `RPGGame` (point d'entrée, réapparition), `GameInput` (clavier et souris, Input System ou ancien système), `WorldBuilder` (construction du niveau, PNJ, ennemis, textes de la quête), `Prim` (primitives et matériaux), `CharacterFactory` (personnages en capsule), `Flicker`, `Spinner` |
+| `Core/` | `RPGGame` (point d'entrée, réapparition), `GameInput` (clavier et souris, Input System ou ancien système), `WorldBuilder` (construction du décor, PNJ, ennemis, textes de la quête), `LevelRoot` et `SpawnMarker` (décor présent dans la scène, points d'apparition), `Prim` (primitives et matériaux), `CharacterFactory` (personnages en capsule), `Flicker`, `Spinner` |
 | `Player/` | `PlayerController` (déplacements relatifs à la caméra, saut, esquive), `PlayerCombat` (épée, combo, potions), `PlayerInteractor` (E pour parler), `ThirdPersonCamera` (orbite, zoom, anti-collision), `CameraShake` |
 | `Combat/` | `Health` (PV, dégâts, flash à l'impact), `EnemyAI` (patrouille, poursuite, attaque télégraphiée, retour au camp, mort) |
 | `NPC/` | `NPC` (dialogue et marqueur de quête fournis par des fonctions, déambulation, se tourne vers le joueur) |

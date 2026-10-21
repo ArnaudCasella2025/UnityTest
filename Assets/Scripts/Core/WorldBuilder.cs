@@ -11,7 +11,6 @@ namespace MiniRPG
     {
         // Disposition générale (nord = +Z).
         static readonly Vector3 VillageCenter = Vector3.zero;
-        static readonly Vector3 PlayerSpawn = new Vector3(0f, 0f, -9f);
         static readonly Vector3 CampCenter = new Vector3(48f, 0f, 72f);
         const float VillageRadius = 20f;
         const float CampRadius = 14f;
@@ -30,23 +29,43 @@ namespace MiniRPG
         static readonly Color Pine = Prim.Hex("#2F5F35");
         static readonly Color Water = Prim.Hex("#3A6EA5");
 
+        // Points d'apparition par défaut (position, orientation Y). Dans une scène où le décor a été généré
+        // (menu Mini RPG), ce sont des objets SpawnMarker que l'on peut déplacer librement.
+        public const string PlayerId = "Joueur";
+        public const string CampId = "Camp des bandits";
+        static readonly Dictionary<string, Vector4> DefaultSpawns = new Dictionary<string, Vector4>
+        {
+            { PlayerId, new Vector4(0f, 0f, -9f, 0f) },
+            { "Aldric", new Vector4(3.2f, 0f, -2.5f, 200f) },
+            { "Garde Hugo", new Vector4(5f, 0f, 16.5f, 180f) },
+            { "Berthe", new Vector4(-5.6f, 0f, 3.3f, 30f) },
+            { "Lina", new Vector4(-2f, 0f, -7f, 0f) },
+            { "Paul", new Vector4(5f, 0f, -9f, 0f) },
+        };
+
         static Transform world;
+        static Transform gameplay;
         static System.Random rng;
+        static readonly Dictionary<string, Transform> markers = new Dictionary<string, Transform>();
 
         static readonly List<Vector3> pathPoints = new List<Vector3>();
 
+        /// <summary>
+        /// Lancement du jeu : construit le décor s'il n'est pas déjà dans la scène, puis les personnages et la quête.
+        /// </summary>
         public static void Build()
         {
-            rng = new System.Random(1234);
-            world = new GameObject("World").transform;
+            if (Object.FindAnyObjectByType<LevelRoot>() == null)
+            {
+                SetupLighting(true);
+                BuildEnvironment();
+            }
 
-            SetupLighting();
-            BuildGround();
-            BuildPath();
-            BuildVillage();
-            BuildCamp();
-            BuildForest();
-            BuildBorders();
+            rng = new System.Random(5678);
+            markers.Clear();
+            foreach (var m in Object.FindObjectsByType<SpawnMarker>(FindObjectsSortMode.None))
+                markers[m.id] = m.transform;
+            gameplay = new GameObject("Gameplay").transform;
 
             var player = BuildPlayer();
             SetupCamera(player.transform);
@@ -54,14 +73,75 @@ namespace MiniRPG
             SetupQuest();
         }
 
+        /// <summary>
+        /// Construit uniquement le décor (lumière, sol, village, forêt, camp, points d'apparition).
+        /// Appelé au lancement, ou dans l'éditeur par le menu « Mini RPG > Générer le décor dans la scène ».
+        /// </summary>
+        public static GameObject BuildEnvironment()
+        {
+            rng = new System.Random(1234);
+            world = new GameObject("Environnement").transform;
+            world.gameObject.AddComponent<LevelRoot>();
+
+            SetupLighting(false);
+            BuildGround();
+            BuildPath();
+            BuildVillage();
+            BuildCamp();
+            BuildForest();
+            BuildBorders();
+            return world.gameObject;
+        }
+
+        static void Marker(string id, Transform parent, Vector3 worldPos, float rotY)
+        {
+            var go = new GameObject("Spawn - " + id);
+            go.transform.SetParent(parent, true);
+            go.transform.position = worldPos;
+            go.transform.rotation = Quaternion.Euler(0, rotY, 0);
+            go.AddComponent<SpawnMarker>().id = id;
+        }
+
+        static void DefaultMarker(string id, Transform parent)
+        {
+            var d = DefaultSpawns[id];
+            Marker(id, parent, new Vector3(d.x, d.y, d.z), d.w);
+        }
+
+        /// <summary>Position et orientation d'un point d'apparition : celles du marqueur s'il existe, sinon les valeurs par défaut.</summary>
+        static void Spawn(string id, out Vector3 pos, out Quaternion rot)
+        {
+            Transform t;
+            if (markers.TryGetValue(id, out t) && t != null)
+            {
+                pos = t.position;
+                rot = Quaternion.Euler(0, t.eulerAngles.y, 0);
+                return;
+            }
+            Vector4 d;
+            if (id == CampId) d = new Vector4(CampCenter.x, CampCenter.y, CampCenter.z, 0f);
+            else d = DefaultSpawns[id];
+            pos = new Vector3(d.x, d.y, d.z);
+            rot = Quaternion.Euler(0, d.w, 0);
+        }
+
+        static Vector3 SpawnPos(string id)
+        {
+            Vector3 p; Quaternion r;
+            Spawn(id, out p, out r);
+            return p;
+        }
+
         static float Rand(float min, float max) { return min + (float)rng.NextDouble() * (max - min); }
 
         // ------------------------------------------------------------------ ambiance
 
-        static void SetupLighting()
+        static void SetupLighting(bool disableSceneLights)
         {
-            // Désactive les lumières déjà présentes dans la scène (ex. scène par défaut).
-            foreach (var l in Object.FindObjectsByType<Light>(FindObjectsSortMode.None)) l.enabled = false;
+            // Au lancement sans décor généré : désactive les lumières déjà présentes (ex. scène par défaut).
+            if (disableSceneLights)
+                foreach (var l in Object.FindObjectsByType<Light>(FindObjectsSortMode.None)) l.enabled = false;
+            if (world == null) return;
 
             var sun = new GameObject("Sun").AddComponent<Light>();
             sun.transform.SetParent(world);
@@ -103,9 +183,9 @@ namespace MiniRPG
             var tpc = cam.GetComponent<ThirdPersonCamera>();
             if (tpc == null) tpc = cam.gameObject.AddComponent<ThirdPersonCamera>();
             tpc.target = target;
-            tpc.yaw = 0f;
+            tpc.yaw = target.eulerAngles.y;
             if (cam.GetComponent<CameraShake>() == null) cam.gameObject.AddComponent<CameraShake>();
-            cam.transform.position = target.position + new Vector3(0, 4, -8);
+            cam.transform.position = target.position + target.rotation * new Vector3(0, 4, -8);
         }
 
         // ------------------------------------------------------------------ terrain
@@ -185,6 +265,10 @@ namespace MiniRPG
             Prim.Make(PrimitiveType.Cylinder, "Plaza", village, new Vector3(0, 0.01f, 0), new Vector3(18f, 0.01f, 18f), Dirt, false);
 
             BuildWell(village, VillageCenter);
+
+            var spawns = new GameObject("Points d'apparition").transform;
+            spawns.SetParent(village);
+            foreach (var id in DefaultSpawns.Keys) DefaultMarker(id, spawns);
 
             House(village, new Vector3(-11, 0, 6), 90f, Prim.Hex("#E8D9B5"), Prim.Hex("#A33B2B"));
             House(village, new Vector3(-12, 0, -6), 90f, Prim.Hex("#D9C7A0"), Prim.Hex("#7A4B2A"));
@@ -401,6 +485,7 @@ namespace MiniRPG
             var camp = new GameObject("BanditCamp").transform;
             camp.SetParent(world);
             camp.position = CampCenter;
+            Marker(CampId, camp, CampCenter, 0f);
 
             Prim.Make(PrimitiveType.Cylinder, "CampGround", camp, new Vector3(0, 0.012f, 0), new Vector3(CampRadius * 2f, 0.01f, CampRadius * 2f), Prim.Hex("#8A7350"), false);
 
@@ -518,7 +603,11 @@ namespace MiniRPG
 
         static GameObject BuildPlayer()
         {
-            var parts = CharacterFactory.Build("Player", PlayerSpawn, Prim.Hex("#3C6FD1"), 1f, true);
+            Vector3 spawn; Quaternion spawnRot;
+            Spawn(PlayerId, out spawn, out spawnRot);
+            var parts = CharacterFactory.Build("Player", spawn, Prim.Hex("#3C6FD1"), 1f, true);
+            parts.root.transform.SetParent(gameplay, true);
+            parts.root.transform.rotation = spawnRot;
             // Petite cape rouge pour distinguer le héros.
             Prim.Make(PrimitiveType.Cube, "Cape", parts.visual, new Vector3(0, 1.05f, -0.48f), new Vector3(0.8f, 1.3f, 0.06f), Prim.Hex("#B8322C"), false, new Vector3(-6, 0, 0));
             // Bouclier sur le bras gauche.
@@ -530,7 +619,7 @@ namespace MiniRPG
             go.AddComponent<Health>().Init("Héros", 100f);
             var pc = go.AddComponent<PlayerController>();
             pc.Visual = parts.visual;
-            pc.SpawnPoint = PlayerSpawn;
+            pc.SpawnPoint = spawn;
             var combat = go.AddComponent<PlayerCombat>();
             combat.weaponPivot = parts.weaponPivot;
             combat.potions = 2;
@@ -539,10 +628,13 @@ namespace MiniRPG
             return go;
         }
 
-        static NPC MakeNPC(string name, Vector3 pos, float rotY, Color color, float size = 1f, float wander = 0f)
+        static NPC MakeNPC(string name, Color color, float size = 1f, float wander = 0f)
         {
+            Vector3 pos; Quaternion rot;
+            Spawn(name, out pos, out rot);
             var parts = CharacterFactory.Build(name, pos, color, size);
-            parts.root.transform.rotation = Quaternion.Euler(0, rotY, 0);
+            parts.root.transform.SetParent(gameplay, true);
+            parts.root.transform.rotation = rot;
             var col = parts.root.AddComponent<CapsuleCollider>();
             col.height = 2f * size;
             col.radius = 0.45f * size;
@@ -558,7 +650,7 @@ namespace MiniRPG
             var q = QuestManager.Instance;
 
             // --- Aldric, le chef du village : le donneur de quête.
-            var aldric = MakeNPC("Aldric", new Vector3(3.2f, 0, -2.5f), 200f, Prim.Hex("#6B4C9A"));
+            var aldric = MakeNPC("Aldric", Prim.Hex("#6B4C9A"));
             var av = aldric.transform.Find("Visual");
             Prim.Make(PrimitiveType.Sphere, "Beard", av, new Vector3(0, 1.3f, 0.38f), new Vector3(0.5f, 0.55f, 0.3f), Prim.Hex("#EDEDED"), false);
             Prim.Make(PrimitiveType.Cylinder, "HatBrim", av, new Vector3(0, 1.98f, 0), new Vector3(1.1f, 0.03f, 1.1f), Prim.Hex("#3B2A55"), false);
@@ -576,7 +668,7 @@ namespace MiniRPG
             aldric.dialogueProvider = () => AldricDialogue(q);
 
             // --- Hugo, le garde à l'entrée nord.
-            var hugo = MakeNPC("Garde Hugo", new Vector3(5f, 0, 16.5f), 180f, Prim.Hex("#7F8C8D"));
+            var hugo = MakeNPC("Garde Hugo", Prim.Hex("#7F8C8D"));
             var hv = hugo.transform.Find("Visual");
             Prim.Make(PrimitiveType.Sphere, "Helmet", hv, new Vector3(0, 1.82f, 0), new Vector3(1.02f, 0.7f, 1.02f), Prim.Hex("#B0B6BA"), false);
             Prim.Make(PrimitiveType.Cylinder, "Spear", hv, new Vector3(0.6f, 1.4f, 0.2f), new Vector3(0.07f, 1.4f, 0.07f), WoodDark, false);
@@ -603,7 +695,7 @@ namespace MiniRPG
             };
 
             // --- Berthe, la marchande.
-            var berthe = MakeNPC("Berthe", new Vector3(-5.6f, 0, 3.3f), 30f, Prim.Hex("#C0632B"));
+            var berthe = MakeNPC("Berthe", Prim.Hex("#C0632B"));
             berthe.interactRange = 3.5f;
             Prim.Make(PrimitiveType.Cube, "Apron", berthe.transform.Find("Visual"), new Vector3(0, 0.85f, 0.45f), new Vector3(0.6f, 0.8f, 0.05f), Prim.Hex("#F2EBDD"), false);
             bool gavePotion = false;
@@ -628,7 +720,7 @@ namespace MiniRPG
             };
 
             // --- Lina, une enfant qui se promène.
-            var lina = MakeNPC("Lina", new Vector3(-2f, 0, -7f), 0f, Prim.Hex("#E07AA8"), 0.7f, 4f);
+            var lina = MakeNPC("Lina", Prim.Hex("#E07AA8"), 0.7f, 4f);
             lina.dialogueProvider = () =>
             {
                 if (q.State == QuestState.Completed)
@@ -639,7 +731,7 @@ namespace MiniRPG
             };
 
             // --- Paul, un fermier.
-            var paul = MakeNPC("Paul", new Vector3(5f, 0, -9f), 0f, Prim.Hex("#4E8F5A"), 1f, 2.5f);
+            var paul = MakeNPC("Paul", Prim.Hex("#4E8F5A"), 1f, 2.5f);
             Prim.Make(PrimitiveType.Cylinder, "StrawHat", paul.transform.Find("Visual"), new Vector3(0, 2.0f, 0), new Vector3(1.2f, 0.05f, 1.2f), Prim.Hex("#E3C565"), false);
             paul.dialogueProvider = () =>
             {
@@ -697,10 +789,11 @@ namespace MiniRPG
         static List<Health> SpawnBandits()
         {
             var result = new List<Health>();
-            result.Add(MakeBandit("Bandit", CampCenter + new Vector3(-4, 0, 2), false));
-            result.Add(MakeBandit("Bandit", CampCenter + new Vector3(4, 0, 3), false));
-            result.Add(MakeBandit("Bandit", CampCenter + new Vector3(2, 0, -5), false));
-            result.Add(MakeBandit("Brutus, chef des bandits", CampCenter + new Vector3(-3, 0, -1), true));
+            var camp = SpawnPos(CampId);
+            result.Add(MakeBandit("Bandit", camp + new Vector3(-4, 0, 2), false));
+            result.Add(MakeBandit("Bandit", camp + new Vector3(4, 0, 3), false));
+            result.Add(MakeBandit("Bandit", camp + new Vector3(2, 0, -5), false));
+            result.Add(MakeBandit("Brutus, chef des bandits", camp + new Vector3(-3, 0, -1), true));
             return result;
         }
 
@@ -709,6 +802,7 @@ namespace MiniRPG
             float size = boss ? 1.35f : 1f;
             var parts = CharacterFactory.Build(name, pos, boss ? Prim.Hex("#7A1F1F") : Prim.Hex("#B03A2E"), size, true,
                 boss ? Prim.Hex("#555555") : (Color?)null);
+            parts.root.transform.SetParent(gameplay, true);
             parts.root.transform.rotation = Quaternion.Euler(0, Rand(0, 360), 0);
 
             if (boss)
@@ -749,13 +843,13 @@ namespace MiniRPG
         static void SetupQuest()
         {
             var q = QuestManager.Instance;
-            q.campCenter = CampCenter;
+            q.campCenter = SpawnPos(CampId);
             q.campRadius = CampRadius - 1f;
             q.spawnBandits = SpawnBandits;
 
             // Colonne lumineuse qui signale le camp tant qu'on n'y est pas allé.
             var beacon = new GameObject("QuestBeacon");
-            beacon.transform.SetParent(world);
+            beacon.transform.SetParent(gameplay);
             Prim.Make(PrimitiveType.Cylinder, "Beam", beacon.transform, new Vector3(0, 20f, 0), new Vector3(0.5f, 20f, 0.5f), Prim.Hex("#FFD84A"), false);
             var ring = Prim.Make(PrimitiveType.Cube, "Diamond", beacon.transform, new Vector3(0, 9f, 0), Vector3.one * 1.4f, Prim.Hex("#FFD84A"), false, new Vector3(45, 0, 45));
             ring.AddComponent<Spinner>();

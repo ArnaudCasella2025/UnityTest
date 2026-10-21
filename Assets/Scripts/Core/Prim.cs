@@ -11,21 +11,36 @@ namespace MiniRPG
     public static class Prim
     {
         static Material baseMaterial;
+
+        /// <summary>
+        /// Dans l'éditeur (génération du décor dans la scène), les matériaux doivent être des assets
+        /// pour être sauvegardés avec la scène : l'outil d'éditeur fournit alors cette fonction.
+        /// </summary>
+        public static System.Func<Color, Material> MaterialProvider;
+
+        public static Material BaseMaterial
+        {
+            get
+            {
+                if (baseMaterial == null)
+                {
+                    var tmp = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    baseMaterial = tmp.GetComponent<Renderer>().sharedMaterial;
+                    DestroySafe(tmp);
+                }
+                return baseMaterial;
+            }
+        }
         static readonly Dictionary<Color, Material> cache = new Dictionary<Color, Material>();
 
         public static Material Mat(Color color)
         {
+            if (MaterialProvider != null) return MaterialProvider(color);
+
             Material m;
             if (cache.TryGetValue(color, out m) && m != null) return m;
 
-            if (baseMaterial == null)
-            {
-                var tmp = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                baseMaterial = tmp.GetComponent<Renderer>().sharedMaterial;
-                Object.Destroy(tmp);
-            }
-
-            m = new Material(baseMaterial) { color = color };
+            m = new Material(BaseMaterial) { color = color };
             cache[color] = m;
             return m;
         }
@@ -61,8 +76,15 @@ namespace MiniRPG
             {
                 // Désactivé immédiatement (Destroy est différé à la fin de la frame).
                 c.enabled = false;
-                Object.Destroy(c);
+                DestroySafe(c);
             }
+        }
+
+        /// <summary>Destroy en jeu, DestroyImmediate dans l'éditeur hors jeu.</summary>
+        public static void DestroySafe(Object o)
+        {
+            if (Application.isPlaying) Object.Destroy(o);
+            else Object.DestroyImmediate(o);
         }
 
         static bool IsUniform(Vector3 v)
