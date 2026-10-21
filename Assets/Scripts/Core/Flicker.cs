@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace MiniRPG
 {
-    /// <summary>Fait vaciller une lumière et pulser les flammes d'un feu de camp.</summary>
+    /// <summary>Fait vaciller une lumière et pulser des objets lumineux (cœur du réacteur, feux...).</summary>
     public class Flicker : MonoBehaviour
     {
         public Light lightSource;

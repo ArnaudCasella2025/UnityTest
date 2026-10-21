@@ -5,7 +5,7 @@ namespace MiniRPG
     /// <summary>
     /// Déplacements du joueur relatifs à la caméra : marche, course, saut, esquive.
     /// </summary>
-    [RequireComponent(typeof(CharacterController), typeof(Health))]
+    [RequireComponent(typeof(CharacterController))]
     public class PlayerController : MonoBehaviour
     {
         public static PlayerController Instance { get; private set; }
@@ -19,18 +19,21 @@ namespace MiniRPG
         public float dodgeDuration = 0.22f;
         public float dodgeCooldown = 0.8f;
 
-        public Health Health { get; private set; }
         public Transform Visual { get; set; }
         public Vector3 SpawnPoint { get; set; }
-        public int Gold { get; set; }
         public bool IsDodging { get { return Time.time < dodgeEnd; } }
 
-        /// <summary>Multiplicateur de vitesse appliqué par le combat (ralenti pendant un coup).</summary>
+        /// <summary>Vrai quand le joueur est monté dans un chasseur : il ne bouge plus et n'est plus visible.</summary>
+        public bool Hidden { get; private set; }
+
+        /// <summary>Jusqu'à cet instant, le joueur garde l'orientation imposée par le tir (il peut se déplacer en crabe).</summary>
+        public float AimUntil { get; set; }
+
+        /// <summary>Multiplicateur de vitesse (ralenti pendant un tir).</summary>
         public float SpeedMultiplier { get; set; }
 
         CharacterController cc;
         float verticalVelocity;
-        Vector3 knockback;
         float dodgeEnd = -1f, nextDodge;
         Vector3 dodgeDir;
 
@@ -38,7 +41,7 @@ namespace MiniRPG
         {
             get
             {
-                return Health.IsDead || (DialogueManager.Instance != null && DialogueManager.Instance.BlocksInput);
+                return Hidden || (DialogueManager.Instance != null && DialogueManager.Instance.BlocksInput);
             }
         }
 
@@ -46,21 +49,21 @@ namespace MiniRPG
         {
             Instance = this;
             cc = GetComponent<CharacterController>();
-            Health = GetComponent<Health>();
             SpeedMultiplier = 1f;
-            Health.Damaged += OnDamaged;
         }
 
-        void OnDamaged(float amount, Vector3 from)
+        /// <summary>Fait disparaître le joueur (il monte dans le chasseur).</summary>
+        public void Hide()
         {
-            var dir = transform.position - from;
-            dir.y = 0;
-            if (dir.sqrMagnitude > 0.001f) knockback = dir.normalized * 7f;
-            if (CameraShake.Instance != null) CameraShake.Instance.Shake(0.15f, 0.12f);
+            Hidden = true;
+            cc.enabled = false;
+            if (Visual != null) Visual.gameObject.SetActive(false);
         }
 
         void Update()
         {
+            if (Hidden) return;
+
             Vector3 move = Vector3.zero;
             bool running = false;
 
@@ -85,7 +88,6 @@ namespace MiniRPG
                     dodgeDir = move.sqrMagnitude > 0.01f ? move.normalized : transform.forward;
                     dodgeEnd = Time.time + dodgeDuration;
                     nextDodge = Time.time + dodgeCooldown;
-                    Health.invulnerableUntil = dodgeEnd + 0.05f;
                 }
             }
 
@@ -101,15 +103,14 @@ namespace MiniRPG
             {
                 float speed = (running ? runSpeed : walkSpeed) * SpeedMultiplier;
                 horizontal = move * speed;
-                if (move.sqrMagnitude > 0.01f)
+                if (move.sqrMagnitude > 0.01f && Time.time >= AimUntil)
                 {
                     var target = Quaternion.LookRotation(move);
                     transform.rotation = Quaternion.Slerp(transform.rotation, target, turnSpeed * Time.deltaTime);
                 }
             }
 
-            knockback = Vector3.Lerp(knockback, Vector3.zero, 8f * Time.deltaTime);
-            cc.Move((horizontal + knockback + Vector3.up * verticalVelocity) * Time.deltaTime);
+            cc.Move((horizontal + Vector3.up * verticalVelocity) * Time.deltaTime);
 
             AnimateVisual(move.magnitude, running);
 
@@ -121,10 +122,6 @@ namespace MiniRPG
         void AnimateVisual(float moveAmount, bool running)
         {
             if (Visual == null) return;
-
-            // Mort : le personnage bascule en arrière ; il se redresse quand il est relevé.
-            var targetRot = Health.IsDead ? Quaternion.Euler(-90f, 0f, 0f) : Quaternion.identity;
-            Visual.localRotation = Quaternion.Slerp(Visual.localRotation, targetRot, 8f * Time.deltaTime);
 
             float targetScale = 1f;
             if (IsDodging)
@@ -148,7 +145,6 @@ namespace MiniRPG
             transform.position = position;
             cc.enabled = true;
             verticalVelocity = 0f;
-            knockback = Vector3.zero;
         }
 
         public void FaceTowards(Vector3 point)

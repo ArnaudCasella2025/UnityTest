@@ -59,7 +59,9 @@ namespace MiniRPG
             var hits = Physics.SphereCastAll(pivot, 0.3f, back, distance, ~0, QueryTriggerInteraction.Ignore);
             foreach (var hit in hits)
             {
-                if (hit.collider.GetComponentInParent<Health>() != null) continue; // ignore les personnages
+                // Ignore les personnages et ce que la caméra suit.
+                if (hit.collider is CharacterController || hit.collider.GetComponentInParent<NPC>() != null) continue;
+                if (hit.collider.transform.IsChildOf(target)) continue;
                 if (hit.distance > 0f && hit.distance < wanted) wanted = hit.distance;
             }
             wanted = Mathf.Max(wanted, 0.8f);

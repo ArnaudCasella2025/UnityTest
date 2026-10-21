@@ -16,7 +16,7 @@ namespace MiniRPG
         /// Dans l'éditeur (génération du décor dans la scène), les matériaux doivent être des assets
         /// pour être sauvegardés avec la scène : l'outil d'éditeur fournit alors cette fonction.
         /// </summary>
-        public static System.Func<Color, Material> MaterialProvider;
+        public static System.Func<Color, bool, Material> MaterialProvider;
 
         public static Material BaseMaterial
         {
@@ -32,10 +32,11 @@ namespace MiniRPG
             }
         }
         static readonly Dictionary<Color, Material> cache = new Dictionary<Color, Material>();
+        static readonly Dictionary<Color, Material> glowCache = new Dictionary<Color, Material>();
 
         public static Material Mat(Color color)
         {
-            if (MaterialProvider != null) return MaterialProvider(color);
+            if (MaterialProvider != null) return MaterialProvider(color, false);
 
             Material m;
             if (cache.TryGetValue(color, out m) && m != null) return m;
@@ -45,9 +46,31 @@ namespace MiniRPG
             return m;
         }
 
+        /// <summary>Matériau lumineux (émissif) : écrans, néons, lasers, réacteur...</summary>
+        public static Material Glow(Color color)
+        {
+            if (MaterialProvider != null) return MaterialProvider(color, true);
+
+            Material m;
+            if (glowCache.TryGetValue(color, out m) && m != null) return m;
+
+            m = CreateGlow(color);
+            glowCache[color] = m;
+            return m;
+        }
+
+        public static Material CreateGlow(Color color)
+        {
+            var m = new Material(BaseMaterial) { color = color };
+            m.EnableKeyword("_EMISSION");
+            m.SetColor("_EmissionColor", color * 1.6f);
+            m.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
+            return m;
+        }
+
         /// <summary>Crée une primitive positionnée, colorée, éventuellement sans collider.</summary>
         public static GameObject Make(PrimitiveType type, string name, Transform parent,
-            Vector3 localPos, Vector3 scale, Color color, bool collider = true, Vector3? euler = null)
+            Vector3 localPos, Vector3 scale, Color color, bool collider = true, Vector3? euler = null, bool glow = false)
         {
             var go = GameObject.CreatePrimitive(type);
             go.name = name;
@@ -55,7 +78,9 @@ namespace MiniRPG
             go.transform.localPosition = localPos;
             go.transform.localScale = scale;
             if (euler.HasValue) go.transform.localRotation = Quaternion.Euler(euler.Value);
-            go.GetComponent<Renderer>().sharedMaterial = Mat(color);
+            var r = go.GetComponent<Renderer>();
+            r.sharedMaterial = glow ? Glow(color) : Mat(color);
+            if (glow) r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             if (!collider) RemoveCollider(go);
             else if (type == PrimitiveType.Cylinder || (type == PrimitiveType.Sphere && !IsUniform(scale)))
             {

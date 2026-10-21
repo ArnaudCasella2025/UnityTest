@@ -1,20 +1,17 @@
 using System;
-using System.Collections.Generic;
 using UnityEngine;
 
 namespace MiniRPG
 {
     /// <summary>
-    /// Personnage non joueur : on peut lui parler (touche E). Son dialogue et le marqueur
+    /// Personnage non joueur : on lui parle avec la touche Action (E). Son dialogue et le marqueur
     /// au-dessus de sa tête (! ou ?) sont fournis par des fonctions, ce qui permet de les faire
     /// dépendre de l'état de la quête.
     /// </summary>
-    public class NPC : MonoBehaviour
+    public class NPC : Interactable
     {
-        public static readonly List<NPC> All = new List<NPC>();
-
-        public string npcName = "Villageois";
-        public float interactRange = 2.8f;
+        public string npcName = "Membre d'équipage";
+        public string role = "";
         public float wanderRadius = 0f;
         public float wanderSpeed = 1.2f;
 
@@ -25,11 +22,14 @@ namespace MiniRPG
         Vector3 wanderTarget;
         float waitUntil;
 
-        public string Marker { get { return markerProvider != null ? markerProvider() : null; } }
-        bool Talking { get { return DialogueManager.Instance != null && DialogueManager.Instance.IsOpen && DialogueManager.Instance.Speaker == transform; } }
+        /// <summary>Petite phrase affichée au-dessus de la tête (ex. quand on tire près de lui).</summary>
+        public string Bark { get; private set; }
+        public float BarkUntil { get; private set; }
 
-        void OnEnable() { All.Add(this); }
-        void OnDisable() { All.Remove(this); }
+        public string Marker { get { return markerProvider != null ? markerProvider() : null; } }
+        public override string Prompt { get { return "Parler à " + npcName; } }
+
+        bool Talking { get { return DialogueManager.Instance != null && DialogueManager.Instance.IsOpen && DialogueManager.Instance.Speaker == transform; } }
 
         void Start()
         {
@@ -71,30 +71,17 @@ namespace MiniRPG
                 transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(d), speed * Time.deltaTime);
         }
 
-        public void Interact()
+        public override void Interact()
         {
             if (dialogueProvider == null) return;
             var d = dialogueProvider();
             if (d != null) DialogueManager.Instance.Open(d, transform);
         }
 
-        /// <summary>PNJ le plus proche à portée d'interaction du point donné (ou null).</summary>
-        public static NPC Closest(Vector3 position)
+        public void Say(string text, float duration = 2.5f)
         {
-            NPC best = null;
-            float bestDist = float.MaxValue;
-            foreach (var n in All)
-            {
-                var d = n.transform.position - position;
-                d.y = 0;
-                float m = d.magnitude;
-                if (m <= n.interactRange && m < bestDist)
-                {
-                    best = n;
-                    bestDist = m;
-                }
-            }
-            return best;
+            Bark = text;
+            BarkUntil = Time.time + duration;
         }
     }
 }

@@ -7,16 +7,18 @@ using UnityEngine;
 namespace MiniRPG.EditorTools
 {
     /// <summary>
-    /// Outils d'éditeur du Mini RPG :
-    /// - à la première ouverture du projet, crée Assets/Scenes/Main.unity avec le décor déjà généré ;
-    /// - menu « Mini RPG > Générer le décor dans la scène » pour (re)générer le décor dans la scène ouverte.
+    /// Outils d'éditeur du RPG spatial :
+    /// - à la première ouverture, crée Assets/Scenes/Vaisseau.unity (décor du vaisseau déjà généré)
+    ///   et Assets/Scenes/Espace.unity, les ajoute au Build et ouvre le vaisseau ;
+    /// - menu « Vaisseau RPG > Générer le décor dans la scène » pour (re)générer le décor dans la scène ouverte.
     /// Le décor généré est fait de GameObjects ordinaires (matériaux enregistrés dans Assets/Materials) :
     /// on peut le modifier librement, le jeu l'utilisera tel quel.
     /// </summary>
     [InitializeOnLoad]
     public static class MiniRPGSetup
     {
-        const string ScenePath = "Assets/Scenes/Main.unity";
+        const string ShipScenePath = "Assets/Scenes/" + GameBoot.ShipScene + ".unity";
+        const string SpaceScenePath = "Assets/Scenes/" + GameBoot.SpaceScene + ".unity";
         const string MaterialsFolder = "Assets/Materials";
 
         static MiniRPGSetup()
@@ -24,44 +26,36 @@ namespace MiniRPG.EditorTools
             EditorApplication.delayCall += () =>
             {
                 if (EditorApplication.isPlayingOrWillChangePlaymode) return;
-                if (!File.Exists(ScenePath)) CreateMainScene(true);
-                else FillEmptyMainScene();
+                if (!File.Exists(ShipScenePath)) CreateScenes(true);
+                else FillEmptyShipScene();
             };
         }
 
-        /// <summary>
-        /// Si la scène principale ouverte est encore totalement vide (créée par une ancienne version du projet),
-        /// on y génère le décor et on l'enregistre.
-        /// </summary>
-        static void FillEmptyMainScene()
+        [MenuItem("Vaisseau RPG/Ouvrir la scène du vaisseau", priority = 0)]
+        static void OpenShip()
         {
-            var scene = EditorSceneManager.GetActiveScene();
-            if (scene.path != ScenePath || scene.rootCount > 0) return;
-            GenerateEnvironment();
-            EditorSceneManager.SaveScene(scene);
-            Debug.Log("[Mini RPG] Décor généré dans " + ScenePath + " : il est modifiable dans la Hierarchy (objet Environnement).");
+            if (!File.Exists(ShipScenePath)) { CreateScenes(false); return; }
+            if (EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
+                EditorSceneManager.OpenScene(ShipScenePath);
         }
 
-        [MenuItem("Mini RPG/Créer ou ouvrir la scène principale", priority = 0)]
-        static void CreateOrOpen()
+        [MenuItem("Vaisseau RPG/Ouvrir la scène de l'espace", priority = 1)]
+        static void OpenSpace()
         {
-            if (File.Exists(ScenePath))
-            {
-                if (EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
-                    EditorSceneManager.OpenScene(ScenePath);
-            }
-            else CreateMainScene(false);
+            if (!File.Exists(SpaceScenePath)) CreateSpaceScene();
+            if (EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
+                EditorSceneManager.OpenScene(SpaceScenePath);
         }
 
-        [MenuItem("Mini RPG/Générer le décor dans la scène", priority = 20)]
+        [MenuItem("Vaisseau RPG/Générer le décor dans la scène", priority = 20)]
         static void GenerateMenu()
         {
-            var existing = Object.FindAnyObjectByType<LevelRoot>();
-            if (existing != null)
+            foreach (var existing in Object.FindObjectsByType<LevelRoot>(FindObjectsSortMode.None))
             {
-                bool replace = EditorUtility.DisplayDialog("Mini RPG",
-                    "La scène contient déjà un décor (« " + existing.name + " »).\n\n" +
-                    "Le remplacer par un décor neuf ? Vos modifications de ce décor seront perdues (annulable avec Ctrl+Z).",
+                if (existing.level != ShipBuilder.LevelName) continue;
+                bool replace = EditorUtility.DisplayDialog("Vaisseau RPG",
+                    "La scène contient déjà le décor du vaisseau.\n\n" +
+                    "Le remplacer par un décor neuf ? Vos modifications de ce décor seront perdues (annulable avec Ctrl/Cmd+Z).",
                     "Remplacer", "Annuler");
                 if (!replace) return;
                 Undo.DestroyObjectImmediate(existing.gameObject);
@@ -73,7 +67,7 @@ namespace MiniRPG.EditorTools
             EditorSceneManager.MarkSceneDirty(root.scene);
         }
 
-        [MenuItem("Mini RPG/Générer le décor dans la scène", true)]
+        [MenuItem("Vaisseau RPG/Générer le décor dans la scène", true)]
         static bool GenerateMenuValidate()
         {
             return !EditorApplication.isPlaying;
@@ -81,12 +75,12 @@ namespace MiniRPG.EditorTools
 
         static GameObject GenerateEnvironment()
         {
-            var created = new Dictionary<Color, Material>();
-            Prim.MaterialProvider = c => MaterialAsset(c, created);
+            var created = new Dictionary<string, Material>();
+            Prim.MaterialProvider = (c, glow) => MaterialAsset(c, glow, created);
             GameObject root;
             try
             {
-                root = WorldBuilder.BuildEnvironment();
+                root = ShipBuilder.BuildEnvironment();
             }
             finally
             {
@@ -97,21 +91,22 @@ namespace MiniRPG.EditorTools
             return root;
         }
 
-        /// <summary>Un matériau par couleur, enregistré (ou réutilisé) dans Assets/Materials.</summary>
-        static Material MaterialAsset(Color color, Dictionary<Color, Material> created)
+        /// <summary>Un matériau par couleur (et par type : normal ou lumineux), enregistré dans Assets/Materials.</summary>
+        static Material MaterialAsset(Color color, bool glow, Dictionary<string, Material> created)
         {
+            var key = (glow ? "Glow_" : "Mat_") + ColorUtility.ToHtmlStringRGB(color);
             Material m;
-            if (created.TryGetValue(color, out m)) return m;
+            if (created.TryGetValue(key, out m)) return m;
 
-            var path = MaterialsFolder + "/Mat_" + ColorUtility.ToHtmlStringRGB(color) + ".mat";
+            var path = MaterialsFolder + "/" + key + ".mat";
             m = AssetDatabase.LoadAssetAtPath<Material>(path);
             if (m == null)
             {
                 if (!AssetDatabase.IsValidFolder(MaterialsFolder)) AssetDatabase.CreateFolder("Assets", "Materials");
-                m = new Material(Prim.BaseMaterial) { color = color };
+                m = glow ? Prim.CreateGlow(color) : new Material(Prim.BaseMaterial) { color = color };
                 AssetDatabase.CreateAsset(m, path);
             }
-            created[color] = m;
+            created[key] = m;
             return m;
         }
 
@@ -123,25 +118,49 @@ namespace MiniRPG.EditorTools
             go.tag = "MainCamera";
             var cam = go.AddComponent<Camera>();
             cam.clearFlags = CameraClearFlags.SolidColor;
-            cam.backgroundColor = RenderSettings.fogColor;
+            cam.backgroundColor = new Color(0.01f, 0.01f, 0.03f);
             cam.fieldOfView = 55f;
+            cam.farClipPlane = 700f;
             go.AddComponent<AudioListener>();
-            go.transform.position = new Vector3(0f, 4.5f, -17f);
-            go.transform.rotation = Quaternion.Euler(18f, 0f, 0f);
+            go.transform.position = new Vector3(0f, 7f, -41f);
+            go.transform.rotation = Quaternion.Euler(42f, 0f, 0f);
             Undo.RegisterCreatedObjectUndo(go, "Générer le décor");
         }
 
-        static void CreateMainScene(bool silent)
+        /// <summary>Si la scène du vaisseau ouverte est encore totalement vide, on y génère le décor.</summary>
+        static void FillEmptyShipScene()
+        {
+            var scene = EditorSceneManager.GetActiveScene();
+            if (scene.path != ShipScenePath || scene.rootCount > 0) return;
+            GenerateEnvironment();
+            EditorSceneManager.SaveScene(scene);
+        }
+
+        static void CreateSpaceScene()
+        {
+            Directory.CreateDirectory("Assets/Scenes");
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
+            EditorSceneManager.SaveScene(scene, SpaceScenePath);
+            EditorSceneManager.CloseScene(scene, true);
+        }
+
+        static void CreateScenes(bool silent)
         {
             if (!silent && !EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
 
             Directory.CreateDirectory("Assets/Scenes");
-            var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            var ship = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             GenerateEnvironment();
-            EditorSceneManager.SaveScene(scene, ScenePath);
-            EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
+            EditorSceneManager.SaveScene(ship, ShipScenePath);
+            if (!File.Exists(SpaceScenePath)) CreateSpaceScene();
+
+            EditorBuildSettings.scenes = new[]
+            {
+                new EditorBuildSettingsScene(ShipScenePath, true),
+                new EditorBuildSettingsScene(SpaceScenePath, true),
+            };
             AssetDatabase.Refresh();
-            Debug.Log("[Mini RPG] Scène " + ScenePath + " créée avec le décor. Appuyez sur Play pour jouer !");
+            Debug.Log("[Vaisseau RPG] Scènes " + ShipScenePath + " et " + SpaceScenePath + " créées. Appuyez sur Play pour jouer !");
         }
     }
 }
