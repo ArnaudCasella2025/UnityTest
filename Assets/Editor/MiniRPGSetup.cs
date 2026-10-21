@@ -25,7 +25,21 @@ namespace MiniRPG.EditorTools
             {
                 if (EditorApplication.isPlayingOrWillChangePlaymode) return;
                 if (!File.Exists(ScenePath)) CreateMainScene(true);
+                else FillEmptyMainScene();
             };
+        }
+
+        /// <summary>
+        /// Si la scène principale ouverte est encore totalement vide (créée par une ancienne version du projet),
+        /// on y génère le décor et on l'enregistre.
+        /// </summary>
+        static void FillEmptyMainScene()
+        {
+            var scene = EditorSceneManager.GetActiveScene();
+            if (scene.path != ScenePath || scene.rootCount > 0) return;
+            GenerateEnvironment();
+            EditorSceneManager.SaveScene(scene);
+            Debug.Log("[Mini RPG] Décor généré dans " + ScenePath + " : il est modifiable dans la Hierarchy (objet Environnement).");
         }
 
         [MenuItem("Mini RPG/Créer ou ouvrir la scène principale", priority = 0)]
