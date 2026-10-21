@@ -33,14 +33,14 @@ namespace MiniRPG
         {
             if (player.InputLocked) return;
 
-            if ((Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.J)) && !attacking && !player.IsDodging)
+            if ((GameInput.MouseDown(0) || GameInput.Down(KeyCode.J)) && !attacking && !player.IsDodging)
             {
                 if (Time.time - lastAttackEnd > comboWindow) comboIndex = 0;
                 StartCoroutine(Attack(comboIndex));
                 comboIndex = (comboIndex + 1) % comboDamage.Length;
             }
 
-            if (Input.GetKeyDown(KeyCode.H) || Input.GetKeyDown(KeyCode.Alpha1))
+            if (GameInput.Down(KeyCode.H) || GameInput.Down(KeyCode.Alpha1))
                 DrinkPotion();
         }
 

@@ -36,13 +36,14 @@ namespace MiniRPG
             bool locked = DialogueManager.Instance != null && DialogueManager.Instance.IsOpen;
             if (!locked)
             {
-                if (Input.GetMouseButton(1))
+                if (GameInput.MouseHeld(1))
                 {
-                    yaw += Input.GetAxis("Mouse X") * mouseSensitivity;
-                    pitch -= Input.GetAxis("Mouse Y") * mouseSensitivity;
+                    var delta = GameInput.MouseDelta();
+                    yaw += delta.x * mouseSensitivity;
+                    pitch -= delta.y * mouseSensitivity;
                 }
 
-                distance -= Input.mouseScrollDelta.y * 1.2f;
+                distance -= GameInput.Scroll() * 1.2f;
                 distance = Mathf.Clamp(distance, minDistance, maxDistance);
             }
             pitch = Mathf.Clamp(pitch, minPitch, maxPitch);

@@ -68,7 +68,7 @@ namespace MiniRPG
             if (ShowingChoices)
             {
                 for (int i = 0; i < current.choices.Count && i < 9; i++)
-                    if (Input.GetKeyDown(KeyCode.Alpha1 + i) || Input.GetKeyDown(KeyCode.Keypad1 + i))
+                    if (GameInput.Down(KeyCode.Alpha1 + i) || GameInput.Down(KeyCode.Keypad1 + i))
                     {
                         Pick(i);
                         return;
@@ -76,9 +76,9 @@ namespace MiniRPG
                 return;
             }
 
-            bool advance = Input.GetKeyDown(KeyCode.E) || Input.GetKeyDown(KeyCode.Space)
-                           || Input.GetKeyDown(KeyCode.Return) || Input.GetMouseButtonDown(0);
-            if (Input.GetKeyDown(KeyCode.Escape)) { Close(); return; }
+            bool advance = GameInput.Down(KeyCode.E) || GameInput.Down(KeyCode.Space)
+                           || GameInput.Down(KeyCode.Return) || GameInput.MouseDown(0);
+            if (GameInput.Down(KeyCode.Escape)) { Close(); return; }
             if (!advance) return;
 
             if (!LineComplete)

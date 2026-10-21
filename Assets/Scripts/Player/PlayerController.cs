@@ -66,10 +66,8 @@ namespace MiniRPG
 
             if (!InputLocked)
             {
-                // Touches lues directement pour gérer à la fois AZERTY (ZQSD) et QWERTY (WASD).
-                float h = (Key(KeyCode.D, KeyCode.RightArrow) ? 1f : 0f) - (Key(KeyCode.A, KeyCode.Q, KeyCode.LeftArrow) ? 1f : 0f);
-                float v = (Key(KeyCode.W, KeyCode.Z, KeyCode.UpArrow) ? 1f : 0f) - (Key(KeyCode.S, KeyCode.DownArrow) ? 1f : 0f);
-                var input = Vector3.ClampMagnitude(new Vector3(h, 0, v), 1f);
+                var m = GameInput.Move(); // ZQSD (AZERTY), WASD (QWERTY) ou flèches
+                var input = Vector3.ClampMagnitude(new Vector3(m.x, 0, m.y), 1f);
 
                 // Direction relative à la caméra, projetée au sol.
                 var cam = Camera.main != null ? Camera.main.transform : transform;
@@ -77,12 +75,12 @@ namespace MiniRPG
                 var right = Vector3.ProjectOnPlane(cam.right, Vector3.up).normalized;
                 move = fwd * input.z + right * input.x;
 
-                running = Input.GetKey(KeyCode.LeftShift);
+                running = GameInput.Held(KeyCode.LeftShift);
 
-                if (cc.isGrounded && Input.GetKeyDown(KeyCode.Space))
+                if (cc.isGrounded && GameInput.Down(KeyCode.Space))
                     verticalVelocity = Mathf.Sqrt(jumpHeight * -2f * gravity);
 
-                if ((Input.GetKeyDown(KeyCode.LeftControl) || Input.GetKeyDown(KeyCode.C)) && Time.time >= nextDodge)
+                if ((GameInput.Down(KeyCode.LeftControl) || GameInput.Down(KeyCode.C)) && Time.time >= nextDodge)
                 {
                     dodgeDir = move.sqrMagnitude > 0.01f ? move.normalized : transform.forward;
                     dodgeEnd = Time.time + dodgeDuration;
@@ -117,12 +115,6 @@ namespace MiniRPG
 
             // Sécurité : si on tombe hors du monde, retour au point de départ.
             if (transform.position.y < -20f) Teleport(SpawnPoint);
-        }
-
-        static bool Key(params KeyCode[] keys)
-        {
-            foreach (var k in keys) if (Input.GetKey(k)) return true;
-            return false;
         }
 
         float bobTime;

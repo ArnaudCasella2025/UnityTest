@@ -6,7 +6,8 @@ aucune scène à préparer à la main.
 
 ## Lancer le jeu
 
-1. Ouvrir le dossier avec **Unity 2022.3 LTS** (ou plus récent, Unity 6 compris) via Unity Hub > *Add project from disk*.
+1. Ouvrir le dossier avec **Unity 6000.3.12f1** (Unity 6.3) via Unity Hub > *Add project from disk*.
+   Si Unity propose de redémarrer pour activer le nouveau système de saisie (Input System), accepter.
 2. À la première ouverture, la scène `Assets/Scenes/Main.unity` est créée automatiquement
    (sinon : menu **Mini RPG > Créer ou ouvrir la scène principale**).
 3. Appuyer sur **Play**.
@@ -14,7 +15,8 @@ aucune scène à préparer à la main.
 Le monde est généré au lancement par `RPGGame` (démarrage automatique dans n'importe quelle scène).
 Pour le désactiver, ajouter le symbole `MINIRPG_NO_AUTOSTART` dans *Project Settings > Player > Scripting Define Symbols*.
 
-Le projet utilise le pipeline de rendu intégré (Built-in) et l'ancien Input Manager (*Active Input Handling* = *Input Manager (Old)* ou *Both*).
+Le projet utilise le pipeline de rendu intégré (Built-in). Les commandes passent par `GameInput`, qui fonctionne avec le package
+Input System comme avec l'ancien Input Manager, quel que soit le réglage *Active Input Handling*.
 
 ## Commandes
 
@@ -48,7 +50,7 @@ qui changent selon l'avancement de la quête. Berthe offre une potion quand la q
 
 | Dossier | Contenu |
 |---|---|
-| `Core/` | `RPGGame` (point d'entrée, réapparition), `WorldBuilder` (construction du niveau, PNJ, ennemis, textes de la quête), `Prim` (primitives et matériaux), `CharacterFactory` (personnages en capsule), `Flicker`, `Spinner` |
+| `Core/` | `RPGGame` (point d'entrée, réapparition), `GameInput` (clavier et souris, Input System ou ancien système), `WorldBuilder` (construction du niveau, PNJ, ennemis, textes de la quête), `Prim` (primitives et matériaux), `CharacterFactory` (personnages en capsule), `Flicker`, `Spinner` |
 | `Player/` | `PlayerController` (déplacements relatifs à la caméra, saut, esquive), `PlayerCombat` (épée, combo, potions), `PlayerInteractor` (E pour parler), `ThirdPersonCamera` (orbite, zoom, anti-collision), `CameraShake` |
 | `Combat/` | `Health` (PV, dégâts, flash à l'impact), `EnemyAI` (patrouille, poursuite, attaque télégraphiée, retour au camp, mort) |
 | `NPC/` | `NPC` (dialogue et marqueur de quête fournis par des fonctions, déambulation, se tourne vers le joueur) |

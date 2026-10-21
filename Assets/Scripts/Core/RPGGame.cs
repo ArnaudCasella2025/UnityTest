@@ -37,7 +37,7 @@ namespace MiniRPG
             var player = PlayerController.Instance;
             if (player == null || !player.Health.IsDead) return;
 
-            if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))
+            if (GameInput.Down(KeyCode.Return) || GameInput.Down(KeyCode.KeypadEnter))
             {
                 player.Health.Revive();
                 player.Teleport(player.SpawnPoint);

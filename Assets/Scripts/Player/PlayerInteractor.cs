@@ -15,7 +15,7 @@ namespace MiniRPG
         void Update()
         {
             Current = player.InputLocked ? null : NPC.Closest(transform.position);
-            if (Current != null && Input.GetKeyDown(KeyCode.E))
+            if (Current != null && GameInput.Down(KeyCode.E))
             {
                 player.FaceTowards(Current.transform.position);
                 Current.Interact();

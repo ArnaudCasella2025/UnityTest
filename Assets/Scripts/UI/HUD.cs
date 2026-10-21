@@ -39,7 +39,7 @@ namespace MiniRPG
 
         void Update()
         {
-            if (Input.GetKeyDown(KeyCode.F1)) { showHelp = !showHelp; helpAutoHideAt = float.MaxValue; }
+            if (GameInput.Down(KeyCode.F1)) { showHelp = !showHelp; helpAutoHideAt = float.MaxValue; }
             if (Time.time > helpAutoHideAt) { showHelp = false; helpAutoHideAt = float.MaxValue; }
         }
 
